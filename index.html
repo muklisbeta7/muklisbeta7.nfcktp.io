@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pembaca NFC Berbasis Web</title>
+    <!-- Memuat Tailwind CSS untuk styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent; /* Mencegah highlight biru saat disentuh */
+        }
+        .scan-button {
+            transition: transform 0.1s, box-shadow 0.2s;
+        }
+        .scan-button:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="bg-white w-full max-w-md mx-auto rounded-xl shadow-lg p-6 md:p-8 m-4">
+        
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Pembaca Web NFC</h1>
+            <p class="text-gray-500 mt-2">Tempelkan tag NFC saat pemindaian aktif.</p>
+        </header>
+
+        <main>
+            <!-- Tombol untuk memulai pemindaian -->
+            <button id="scanButton" class="scan-button w-full bg-indigo-600 text-white font-bold py-4 px-6 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-300">
+                Mulai Pindai NFC
+            </button>
+
+            <!-- Area untuk menampilkan status dan pesan -->
+            <div id="statusArea" class="text-center mt-6 text-gray-600 h-6"></div>
+
+            <!-- Kartu untuk menampilkan hasil pembacaan -->
+            <div id="resultCard" class="hidden mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-gray-700 mb-2">Hasil Pembacaan:</h2>
+                
+                <div>
+                    <strong class="text-gray-600">Serial Number:</strong>
+                    <pre id="serialNumber" class="text-sm bg-white p-2 mt-1 rounded-md text-gray-800 overflow-x-auto"></pre>
+                </div>
+
+                <div class="mt-4">
+                    <strong class="text-gray-600">Isi Data (NDEF):</strong>
+                    <pre id="message" class="text-sm bg-white p-2 mt-1 rounded-md text-gray-800 whitespace-pre-wrap break-words min-h-[50px]"></pre>
+                </div>
+            </div>
+        </main>
+
+        <footer class="text-center mt-8">
+            <p id="compatibility" class="text-sm text-red-500 font-semibold"></p>
+        </footer>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const scanButton = document.getElementById('scanButton');
+            const statusArea = document.getElementById('statusArea');
+            const resultCard = document.getElementById('resultCard');
+            const serialNumberEl = document.getElementById('serialNumber');
+            const messageEl = document.getElementById('message');
+            const compatibilityEl = document.getElementById('compatibility');
+
+            // 1. Cek Kompatibilitas Browser
+            if ('NDEFReader' in window) {
+                scanButton.disabled = false;
+            } else {
+                compatibilityEl.textContent = 'Web NFC tidak didukung di browser atau perangkat ini. Coba gunakan Chrome di Android.';
+                scanButton.disabled = true;
+                scanButton.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+
+            // 2. Tambahkan Event Listener ke Tombol
+            scanButton.addEventListener('click', async () => {
+                statusArea.textContent = 'Mempersiapkan pemindai...';
+                resultCard.classList.add('hidden'); // Sembunyikan hasil sebelumnya
+
+                try {
+                    // 3. Buat instance NDEFReader baru
+                    const ndef = new NDEFReader();
+
+                    // 4. Mulai memindai. Ini akan meminta izin pengguna.
+                    await ndef.scan();
+                    
+                    statusArea.textContent = 'Pemindai Aktif! Tempelkan tag NFC Anda...';
+                    console.log("Scan started successfully.");
+
+                    // 5. Dengarkan event 'readingerror'
+                    ndef.addEventListener('readingerror', () => {
+                        statusArea.textContent = 'Gagal membaca tag. Coba lagi.';
+                        console.error("Cannot read data from the NFC tag. Try another one?");
+                    });
+
+                    // 6. Dengarkan event 'reading' yang utama
+                    ndef.addEventListener('reading', ({ message, serialNumber }) => {
+                        statusArea.textContent = 'Tag Berhasil Dibaca!';
+                        console.log(`Serial Number: ${serialNumber}`);
+                        console.log(`NDEFMessage:`, message);
+
+                        serialNumberEl.textContent = serialNumber || 'N/A';
+                        
+                        // Proses dan tampilkan setiap record dalam pesan NDEF
+                        const messageContent = message.records.map(record => {
+                            const decoder = new TextDecoder(record.encoding || 'utf-8');
+                            let text = `> Tipe Data: ${record.recordType}\n`;
+                            if (record.mediaType) {
+                                text += `> Media Type: ${record.mediaType}\n`;
+                            }
+                            text += `> Isi: ${decoder.decode(record.data)}`;
+                            return text;
+                        }).join('\n\n');
+
+                        messageEl.textContent = messageContent || 'Tidak ada data NDEF yang bisa dibaca.';
+                        resultCard.classList.remove('hidden'); // Tampilkan hasil
+                    });
+
+                } catch (error) {
+                    statusArea.textContent = 'Gagal memulai pemindai.';
+                    console.error("Argh! " + error);
+                    alert(`Error: ${error.message}`);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
